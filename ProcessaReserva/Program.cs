@@ -9,7 +9,7 @@ namespace ProcessaReserva.RegisterDevices
     // também deletei o 		static void Main(string[] args)
     class Program
     {
-        
+
         public static async Task<string> CreateRegistrationIdAsync(DeviceRegistration deviceUpdate, NotificationHubClient _hub, string defaultFullSharedAccessSignature, string hubName)
         {
             string newRegistrationId = null;
@@ -24,11 +24,11 @@ namespace ProcessaReserva.RegisterDevices
                     await _hub.DeleteRegistrationAsync(registration);
                 }
             }
-            
-            newRegistrationId = await CreateOrUpdateRegistrationAsync(deviceUpdate, _hub,defaultFullSharedAccessSignature,hubName);
+
+            newRegistrationId = await CreateOrUpdateRegistrationAsync(deviceUpdate, _hub, defaultFullSharedAccessSignature, hubName);
             return newRegistrationId;
         }
-        private static async Task<string> CreateOrUpdateRegistrationAsync(DeviceRegistration deviceUpdate,  NotificationHubClient _hub, string defaultFullSharedAccessSignature, string hubName)
+        private static async Task<string> CreateOrUpdateRegistrationAsync(DeviceRegistration deviceUpdate, NotificationHubClient _hub, string defaultFullSharedAccessSignature, string hubName)
         {
 
             var newRegistrationId = await _hub.CreateRegistrationIdAsync();
@@ -56,6 +56,6 @@ namespace ProcessaReserva.RegisterDevices
             await _hub.CreateOrUpdateRegistrationAsync(registration);
             return registration.RegistrationId;
         }
-       
+    }
 }
 
