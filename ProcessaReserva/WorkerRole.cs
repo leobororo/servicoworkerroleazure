@@ -12,6 +12,8 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 using Microsoft.ServiceBus.Notifications;
+using DomainClasses;
+using ProcessaReserva.RegisterDevices;
 
 namespace ProcessaReserva
 {
@@ -22,6 +24,9 @@ namespace ProcessaReserva
 
         static CloudQueue cloudQueue;
         private static NotificationHubClient _hub;
+        // Utilizado para fazer a cofiguração do device e
+        string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
+        string hubName = "hubcomputacaonuvem";
 
         public WorkerRole()
         {
@@ -42,8 +47,8 @@ namespace ProcessaReserva
             //       Every time .CreateIfNotExists() is executed a storage transaction and a bit of latency for the call occurs.
             cloudQueue.CreateIfNotExists();
 
-            string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
-            string hubName = "hubcomputacaonuvem";
+            //string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
+            //string hubName = "hubcomputacaonuvem";
             _hub = NotificationHubClient.CreateClientFromConnectionString(defaultFullSharedAccessSignature, hubName);
         }
 
@@ -110,26 +115,43 @@ namespace ProcessaReserva
                 return;
             }
 
-            String pedido;
+            PedidoReservaQuadra pedido;
 
             try
             {
-                pedido = JsonConvert.DeserializeObject<String>(cloudQueueMessage.AsString);
+                pedido = JsonConvert.DeserializeObject<PedidoReservaQuadra>(cloudQueueMessage.AsString);
                 Trace.TraceInformation(cloudQueueMessage.AsString);
+                cloudQueue.DeleteMessage(cloudQueueMessage);
+
+
+                //Temos que configurar as mensagem aqui para o usuário
+                String mensagen = pedido.quadra.name;
+                
+                var handle = pedido.deviceId;
+
+                var platform = "gcm";
+
+                // Temos que fazer uma forma de criar uma identificação única para o Hub, é por esse nome que ele envia a mensagem
+                var tag = "Teste";
+                
+                // Realizar o registro do device no serviço de HUB da azure. ESte método verifica se o device já foi cadastrado e caso já tenha ocorrido
+                // o seu cadastro, o mesmo e eliminado e cadastrado novamente
+                string registrationId = Program.CreateRegistrationIdAsync(new DeviceRegistration() { Handle = handle, Platform = platform, Tags = new List<string>() { tag } },_hub, defaultFullSharedAccessSignature, hubName).Result;                
+                
+                // Enviar a mensagem para o devaice
+                await SendNotificationAsync("gcm", mensagen, tag);
             }
             catch (Exception e)
             {
                 Trace.TraceInformation("It is not a Pedido object");
             }
 
-            await SendNotificationAsync("gcm", "teste", "leonardo");
-
-            cloudQueue.DeleteMessage(cloudQueueMessage);
+            
         }
 
         public async Task<bool> SendNotificationAsync(string platform, string message, string to_tag)
         {
-            var user = "Alunos da puc minas";
+            var user = "Pelada dos amigos";
             string[] userTag = new string[1];
             userTag[0] = to_tag;
 
@@ -172,4 +194,7 @@ namespace ProcessaReserva
             return false;
         }
     }
+
+
+    
 }
