@@ -12,43 +12,61 @@ using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 using Microsoft.ServiceBus.Notifications;
-using DomainClasses;
 using ProcessaReserva.RegisterDevices;
+using ProcessaReserva.Repositories;
+using DomainClasses;
+using ProcessaReserva.Services;
 
 namespace ProcessaReserva
 {
     public class WorkerRole : RoleEntryPoint
     {
+        private static ReservaService _reservaService = new ReservaService();
+
         private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private readonly ManualResetEvent runCompleteEvent = new ManualResetEvent(false);
 
-        static CloudQueue cloudQueue;
+        // referência para a fila contida no account storage da nuvem
+        static CloudQueue cloudQueue;        
+
+        // Utilizado para fazer a conexão com o storage account e acessar a fila
+        const string connectionString = "DefaultEndpointsProtocol=https;AccountName=trabalhocomputacaonuvem;AccountKey=YNmHYnn5Wl0MzKJUVoKvn98KtkFhIcTYGPNS4TZEsOfPvMKuzl1OV65bv3FXxdRH2/hNluFNxONcUkBUlNnePw==";
+
+        // id da fila fornecida pelo serviço de storage account
+        const string idQueue = "demoqueue";
+
+        // referência para o serviço de hub notification
         private static NotificationHubClient _hub;
-        // Utilizado para fazer a cofiguração do device e
-        string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
-        string hubName = "hubcomputacaonuvem";
+
+        // Utilizado para fazer a configuração do acesso ao hub de notificação
+        const string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
+
+        // nome dado ao serviço de hub notification
+        const string hubName = "hubcomputacaonuvem";
+
+        // serviço de notificação que será utilizado pelo hub
+        const string platform = "gcm";
+
+        // tag de referência para o envio
+        const string tag = "Teste";
 
         public WorkerRole()
-        {
-            var connectionString = "DefaultEndpointsProtocol=https;AccountName=trabalhocomputacaonuvem;AccountKey=YNmHYnn5Wl0MzKJUVoKvn98KtkFhIcTYGPNS4TZEsOfPvMKuzl1OV65bv3FXxdRH2/hNluFNxONcUkBUlNnePw==";
-
+        {            
+            // cria a referência para a fila contida no cloud storage
             CloudStorageAccount cloudStorageAccount;
 
             if (!CloudStorageAccount.TryParse(connectionString, out cloudStorageAccount))
             {
-                Trace.TraceInformation("Deu erro");
+                Trace.TraceInformation("Erro ao conectar com o Storage account");
             }
 
             var cloudQueueClient = cloudStorageAccount.CreateCloudQueueClient();
-            cloudQueue = cloudQueueClient.GetQueueReference("demoqueue");
 
-            // Note: Usually this statement can be executed once during application startup or maybe even never in the application.
-            //       A queue in Azure Storage is often considered a persistent item which exists over a long time.
-            //       Every time .CreateIfNotExists() is executed a storage transaction and a bit of latency for the call occurs.
+            cloudQueue = cloudQueueClient.GetQueueReference(idQueue);
+
             cloudQueue.CreateIfNotExists();
 
-            //string defaultFullSharedAccessSignature = "Endpoint=sb://hubcomputacaonuvem.servicebus.windows.net/;SharedAccessKeyName=DefaultFullSharedAccessSignature;SharedAccessKey=rkAHLz42DgWACrTS1OAT9u5cagW1GgRHEYc7IunkTV8=";
-            //string hubName = "hubcomputacaonuvem";
+            // cria a referência para o serviço de hub notification
             _hub = NotificationHubClient.CreateClientFromConnectionString(defaultFullSharedAccessSignature, hubName);
         }
 
@@ -100,6 +118,7 @@ namespace ProcessaReserva
             {
                 Trace.TraceInformation("Working");
 
+                //obtém a mensagem da fila existente no Azure
                 GetMessageFromQueue();
 
                 await Task.Delay(1000);
@@ -115,40 +134,81 @@ namespace ProcessaReserva
                 return;
             }
 
+            // trata da mensagem caso esta não seja nula
+            await handleMessage(cloudQueueMessage);
+
+        }
+
+
+        private async Task handleMessage(CloudQueueMessage cloudQueueMessage)
+        {
             PedidoReservaQuadra pedido;
 
             try
             {
+                // tenta converter o objeto que foi serializado no formato JSON
                 pedido = JsonConvert.DeserializeObject<PedidoReservaQuadra>(cloudQueueMessage.AsString);
-                Trace.TraceInformation(cloudQueueMessage.AsString);
-                cloudQueue.DeleteMessage(cloudQueueMessage);
 
+                Trace.TraceInformation(cloudQueueMessage.AsString);                
 
-                //Temos que configurar as mensagem aqui para o usuário
-                String mensagen = pedido.quadra.name;
-                
-                var handle = pedido.deviceId;
-
-                var platform = "gcm";
+                // obtém a mensagem que será enviada via push
+                string mensagem = getPushNotificationMessage(pedido);
 
                 // Temos que fazer uma forma de criar uma identificação única para o Hub, é por esse nome que ele envia a mensagem
-                var tag = "Teste";
-                
-                // Realizar o registro do device no serviço de HUB da azure. ESte método verifica se o device já foi cadastrado e caso já tenha ocorrido
-                // o seu cadastro, o mesmo e eliminado e cadastrado novamente
-                string registrationId = Program.CreateRegistrationIdAsync(new DeviceRegistration() { Handle = handle, Platform = platform, Tags = new List<string>() { tag } },_hub, defaultFullSharedAccessSignature, hubName).Result;                
-                
+                registerDeviceOnHubService(pedido, platform, tag);
+
                 // Enviar a mensagem para o devaice
-                await SendNotificationAsync("gcm", mensagen, tag);
+                await SendNotificationAsync(platform, mensagem, tag);
+
+                //exclui a mensagem da fila
+                cloudQueue.DeleteMessage(cloudQueueMessage);
             }
             catch (Exception e)
             {
                 Trace.TraceInformation("It is not a Pedido object");
             }
+        }
+
+        // Método que delega a reserva da quadra e devolve uma mensagem de acordo com o resultado da requisição de reserva
+        private static string getPushNotificationMessage(PedidoReservaQuadra pedido)
+        {
+            List<string> horariosReservados = _reservaService.fazerReserva(pedido);
+            
+            // Monta a mensagem de notificação de acordo com o resultado retornado pelo serviço
+            if (horariosReservados == null)
+            {
+                return "Reserva não pode ser realizada";
+            } else
+            {
+                string stringReservaComSucesso = "Reserva realizada com sucesso! Horários reservados:";
+
+                foreach (string horarios in horariosReservados)
+                {
+                    stringReservaComSucesso += " " + horarios;
+                }
+
+                return stringReservaComSucesso;
+            }
 
             
         }
 
+        // Método que delega o registro do device do usuário no hub de notificação
+        private void registerDeviceOnHubService(PedidoReservaQuadra pedido, string platform, string tag)
+        {
+            var handle = pedido.deviceId;
+
+            // Realizar o registro do device no serviço de HUB da azure. ESte método verifica se o device já foi cadastrado e caso já tenha ocorrido
+            // o seu cadastro, o mesmo e eliminado e cadastrado novamente
+            string registrationId = Program.CreateRegistrationIdAsync(new DeviceRegistration() {
+                Handle = handle, Platform = platform,
+                Tags = new List<string>() {
+                    tag
+                }
+            }, _hub, defaultFullSharedAccessSignature, hubName).Result;
+        }
+
+        // Prepara e envia a mensagem para o hub de notificação que realizará a push notification
         public async Task<bool> SendNotificationAsync(string platform, string message, string to_tag)
         {
             var user = "Pelada dos amigos";
@@ -191,6 +251,7 @@ namespace ProcessaReserva
                     return true;
                 }
             }
+
             return false;
         }
     }

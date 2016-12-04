@@ -4,9 +4,7 @@ using System.Threading.Tasks;
 
 namespace ProcessaReserva.RegisterDevices
 {
-    // Essa classe eu copiei do projeto
-    // Deletei os seguinte métodos que não vamos usar: SendNotificationAsync - RegistrationsTemplate
-    // também deletei o 		static void Main(string[] args)
+    // Classe para registro do device no serviço do hub de notificação
     class Program
     {
 
@@ -26,8 +24,10 @@ namespace ProcessaReserva.RegisterDevices
             }
 
             newRegistrationId = await CreateOrUpdateRegistrationAsync(deviceUpdate, _hub, defaultFullSharedAccessSignature, hubName);
+
             return newRegistrationId;
         }
+
         private static async Task<string> CreateOrUpdateRegistrationAsync(DeviceRegistration deviceUpdate, NotificationHubClient _hub, string defaultFullSharedAccessSignature, string hubName)
         {
 
@@ -51,9 +51,12 @@ namespace ProcessaReserva.RegisterDevices
             }
 
             registration.RegistrationId = newRegistrationId;
+
             // add check if user is allowed to add these tags
             registration.Tags = new HashSet<string>(deviceUpdate.Tags);
+
             await _hub.CreateOrUpdateRegistrationAsync(registration);
+
             return registration.RegistrationId;
         }
     }
