@@ -33,8 +33,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="AzureNotificationHub, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Azure-NotificationHub.1.0.3\lib\AzureNotificationHub.dll</HintPath>
+      <HintPath>..\packages\Azure-NotificationHub.1.0.2\lib\AzureNotificationHub.dll</HintPath>
       <Private>True</Private>
+    </Reference>
+    <Reference Include="DomainClasses">
+      <HintPath>..\..\domainazure\bin\Debug\DomainClasses.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Azure.KeyVault.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Azure.KeyVault.Core.1.0.0\lib\net40\Microsoft.Azure.KeyVault.Core.dll</HintPath>
@@ -118,10 +121,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\DomainClasses\DomainClasses.csproj">
-      <Project>{D05A5AED-02CE-44B9-AC69-92098AED438A}</Project>
-      <Name>DomainClasses</Name>
-    </ProjectReference>
+    <WCFMetadata Include="Service References\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

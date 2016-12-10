@@ -46,9 +46,8 @@ namespace ProcessaReserva
 
         // serviço de notificação que será utilizado pelo hub
         const string platform = "gcm";
-
-        // tag de referência para o envio
-        const string tag = "Teste";
+        //Contador para device
+        static int contador = 1;
 
         public WorkerRole()
         {            
@@ -121,7 +120,7 @@ namespace ProcessaReserva
                 //obtém a mensagem da fila existente no Azure
                 GetMessageFromQueue();
 
-                await Task.Delay(1000);
+                await Task.Delay(60000);
             }
         }
 
@@ -144,6 +143,8 @@ namespace ProcessaReserva
         {
             PedidoReservaQuadra pedido;
 
+          
+
             try
             {
                 // tenta converter o objeto que foi serializado no formato JSON
@@ -153,6 +154,8 @@ namespace ProcessaReserva
 
                 // obtém a mensagem que será enviada via push
                 string mensagem = getPushNotificationMessage(pedido);
+                string tag = "teste" + contador;
+                contador++;
 
                 // Temos que fazer uma forma de criar uma identificação única para o Hub, é por esse nome que ele envia a mensagem
                 registerDeviceOnHubService(pedido, platform, tag);
